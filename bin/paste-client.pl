@@ -51,8 +51,9 @@ if (@data) {
                                   Timeout             => '8'
   ) or die "Error: Creation of socket: $!";
   print $sock @data;
-  my $count = 0;
   print $sock "\n";
+  $sock->shutdown(1);
+  my $count = 0;
   while(my $res = <$sock>) {
       if (($res =~ m|https://.*/p/.*|) || ($res =~ m/0x/)) {
       

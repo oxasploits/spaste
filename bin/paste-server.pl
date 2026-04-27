@@ -175,16 +175,11 @@ sub server {
     print $tee purdydate() . "0x0C Could not write to file! ";
     die;
   };
-  print $cl "$srvname/p/$rndid\n";
-  my $switch = 0;
   while (my $line = $cl->getline()) {    # i can make getline work like this
     print P $line;
-    if ($switch == 0) {
-      $switch = 1;
-      print $cl "<<END>>\n\n";
-    }
   }
   close(P);
+  print $cl "$srvname/p/$rndid\n";
 
   # needs to be closed out way out here to avoid cutting document short
   $cl->close();
