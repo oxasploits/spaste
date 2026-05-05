@@ -66,7 +66,7 @@ if (!-r $ARGV[1]) {
 # Declare all config-derived variables up front
 my (
   $logfile,  $pasteroot, $host,    $srvname, $port,
-  $certfile, $keyfile,   $pidfile, $seclvl);
+  $certfile, $keyfile,   $pidfile, $seclvl,  $maxpastesize);
 
 my $cfgf = undef;
 GetOptions('conf=s' => \$cfgf);           # parse --conf <file> into $cfgf
@@ -82,6 +82,7 @@ $pidfile   = $config->{Settings}{pidfile};   # lock file written with our PID to
 $pasteroot = $config->{Server}{pasteroot};   # filesystem directory where paste files are stored
 $logfile   = $config->{Settings}{logfile};   # log file path
 $seclvl    = $config->{Settings}{seclvl};    # number of random characters in a paste ID (entropy level)
+$maxpastesize = $config->{Server}{maxpastesize};  # maximum allowed paste size in bytes
 my $ver = "v1.3.1";                          # hell yea, new revision!
                                              # can we have a party
                                              # with lots of hookers?
@@ -160,6 +161,16 @@ if ($seclvl < 8) {
 if ($seclvl < 12) {
   print $tee purdydate()
     . " 0x0F Warning: Setting the security level lower than 12 is probably a bad idea... continuing anyway...\n";
+}
+
+# Validate that maxpastesize is a positive integer if provided
+if (defined $maxpastesize) {
+  if (!isint($maxpastesize) || $maxpastesize <= 0) {
+    print $tee purdydate()
+      . " 0x0E The maxpastesize doesn't seem to be a positive integer!\n";
+    exit $SIG{TERM};
+  }
+  print $tee purdydate() . " 0x00 Max paste size: $maxpastesize bytes\n";
 }
 
 # -------------------------------------------------------------------------
@@ -259,7 +270,17 @@ sub server {
 
   # Read all lines from the client and write them directly to the paste file.
   # getline() blocks until data arrives and returns undef on EOF (client disconnect).
+  my $total_bytes = 0;
   while (my $line = $cl->getline()) {
+    $total_bytes += length($line);
+    if (defined $maxpastesize && $total_bytes > $maxpastesize) {
+      close(P);
+      unlink($filename);
+      print $cl "0x0E Error: Paste exceeds maximum allowed size of $maxpastesize bytes!\n";
+      print $tee purdydate() . " 0x0E " . $cl->peerhost . " paste too large ($total_bytes bytes), rejected.\n";
+      $cl->close();
+      return 0;
+    }
     print P $line;
   }
 
