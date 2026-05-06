@@ -68,7 +68,8 @@ if (!-r $ARGV[1]) {
 # Declare all config-derived variables up front
 my (
   $logfile,  $pasteroot, $host,    $srvname, $port,
-  $certfile, $keyfile,   $pidfile, $seclvl,  $maxpastesize);
+  $certfile, $keyfile,   $pidfile, $seclvl,  $maxpastesize,
+  $allowbinary);
 
 my $cfgf = undef;
 GetOptions('conf=s' => \$cfgf);           # parse --conf <file> into $cfgf
@@ -85,6 +86,7 @@ $pasteroot = $config->{Server}{pasteroot};   # filesystem directory where paste 
 $logfile   = $config->{Settings}{logfile};   # log file path
 $seclvl    = $config->{Settings}{seclvl};    # number of random characters in a paste ID (entropy level)
 $maxpastesize = $config->{Server}{maxpastesize};  # maximum allowed paste size in bytes
+$allowbinary  = $config->{Settings}{allowbinary}; # 0 = reject pastes containing binary characters
 my $ver = "v1.3.1";                          # hell yea, new revision!
                                              # can we have a party
                                              # with lots of hookers?
@@ -179,6 +181,21 @@ if (defined $maxpastesize) {
     exit $SIG{TERM};
   }
   print $tee purdydate() . " 0x00 Max paste size: $maxpastesize bytes\n";
+}
+
+# Validate allowbinary if provided; treat undefined as permissive (allow binary)
+if (defined $allowbinary) {
+  if ($allowbinary ne '0' && $allowbinary ne '1') {
+    print $tee purdydate()
+      . " 0x0E The allowbinary setting must be 0 or 1!\n";
+    exit $SIG{TERM};
+  }
+  if ($allowbinary eq '0') {
+    print $tee purdydate() . " 0x00 Binary paste content is disabled.\n";
+  }
+  else {
+    print $tee purdydate() . " 0x00 Binary paste content is allowed.\n";
+  }
 }
 
 # -------------------------------------------------------------------------
@@ -286,6 +303,14 @@ sub server {
       unlink($filename);
       print $cl "\r\n\r\n0x0E Error: Paste exceeds maximum allowed size of $maxpastesize bytes!\n";
       print $tee purdydate() . " 0x0E " . $cl->peerhost . " paste too large ($total_bytes bytes), rejected.\n";
+      $cl->close();
+      return 0;
+    }
+    if (defined $allowbinary && $allowbinary eq '0' && $line =~ /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/) {
+      close(P);
+      unlink($filename);
+      print $cl "\r\n\r\n0x0E Error: Paste contains binary characters, which is not allowed!\n";
+      print $tee purdydate() . " 0x0E " . $cl->peerhost . " paste contains binary characters, rejected.\n";
       $cl->close();
       return 0;
     }
