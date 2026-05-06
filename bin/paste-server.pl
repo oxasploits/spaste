@@ -25,6 +25,7 @@ use Fcntl ("F_GETFL", "F_SETFL", "O_NONBLOCK"); # fcntl constants for non-blocki
 use Socket;                                    # low-level socket support
 use IO::Socket::SSL;                           # SSL/TLS socket layer
 use IO::Socket::SSL::Utils qw(PEM_file2cert CERT_asHash CERT_free); # certificate introspection
+use Net::SSLeay qw(load_error_strings ERR_get_error ERR_error_string); # low-level SSL for keypair checks
 use threads;                                   # POSIX threads for handling clients concurrently
 use IO::Tee;                                   # tee output to multiple filehandles at once
 use Config::Tiny;                              # lightweight .ini-style config file parser
@@ -144,6 +145,9 @@ if (!-r $keyfile) {
 
 # Inspect the SSL certificate for validity and expiry before binding
 check_ssl_cert($certfile);
+
+# Verify the private key is valid and matches the certificate
+check_ssl_keypair($certfile, $keyfile);
 
 # Validate that the port and security level are integers
 if (!isint($port)) {
@@ -348,6 +352,61 @@ END {
     print STDERR
       "0x03 Error: Something unusual happened before config was read... exiting!\n";
   }
+}
+
+# -------------------------------------------------------------------------
+# check_ssl_keypair($certfile, $keyfile) — verifies the private key is valid
+# and that it forms a matching pair with the certificate.
+# Exits with an error if the key is unparseable or does not match the cert.
+# -------------------------------------------------------------------------
+sub check_ssl_keypair {
+  my ($cert_file, $key_file) = @_;
+
+  Net::SSLeay::load_error_strings();
+  Net::SSLeay::SSLeay_add_ssl_algorithms();
+
+  # Create a temporary SSL context to load and validate the keypair
+  my $ctx = Net::SSLeay::CTX_new();
+  if (!$ctx) {
+    print $tee purdydate()
+      . " 0x0D Error: Could not create SSL context for keypair check.\n";
+    exit $SIG{TERM};
+  }
+
+  # Attempt to load the certificate into the context
+  if (!Net::SSLeay::CTX_use_certificate_file($ctx, $cert_file,
+      Net::SSLeay::FILETYPE_PEM()))
+  {
+    my $err = Net::SSLeay::ERR_error_string(Net::SSLeay::ERR_get_error());
+    print $tee purdydate()
+      . " 0x0C Error: Could not load certificate for keypair validation: $err\n";
+    Net::SSLeay::CTX_free($ctx);
+    exit $SIG{TERM};
+  }
+
+  # Attempt to load the private key into the context — catches corrupt/invalid keys
+  if (!Net::SSLeay::CTX_use_PrivateKey_file($ctx, $key_file,
+      Net::SSLeay::FILETYPE_PEM()))
+  {
+    my $err = Net::SSLeay::ERR_error_string(Net::SSLeay::ERR_get_error());
+    print $tee purdydate()
+      . " 0x0D Error: Private key is invalid or could not be loaded: $err\n";
+    Net::SSLeay::CTX_free($ctx);
+    exit $SIG{TERM};
+  }
+
+  # Verify the private key corresponds to the certificate's public key
+  if (!Net::SSLeay::CTX_check_private_key($ctx)) {
+    my $err = Net::SSLeay::ERR_error_string(Net::SSLeay::ERR_get_error());
+    print $tee purdydate()
+      . " 0x0D Error: Private key does not match the certificate: $err\n";
+    Net::SSLeay::CTX_free($ctx);
+    exit $SIG{TERM};
+  }
+
+  Net::SSLeay::CTX_free($ctx);
+  print $tee purdydate()
+    . " 0x00 SSL certificate and private key pair verified successfully.\n";
 }
 
 # -------------------------------------------------------------------------
