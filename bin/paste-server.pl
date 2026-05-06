@@ -24,6 +24,7 @@ use IO::Handle;                                # for autoflush on filehandles
 use Fcntl ("F_GETFL", "F_SETFL", "O_NONBLOCK"); # fcntl constants for non-blocking I/O
 use Socket;                                    # low-level socket support
 use IO::Socket::SSL;                           # SSL/TLS socket layer
+use IO::Socket::SSL::Utils qw(PEM_file2cert CERT_asHash CERT_free); # certificate introspection
 use threads;                                   # POSIX threads for handling clients concurrently
 use IO::Tee;                                   # tee output to multiple filehandles at once
 use Config::Tiny;                              # lightweight .ini-style config file parser
@@ -140,6 +141,9 @@ if (!-r $keyfile) {
     . " 0x0D The private key file is not readable! Check permissions!\n";
   exit $SIG{TERM};
 }
+
+# Inspect the SSL certificate for validity and expiry before binding
+check_ssl_cert($certfile);
 
 # Validate that the port and security level are integers
 if (!isint($port)) {
@@ -343,6 +347,63 @@ END {
     # Config was never read, so $tee may not exist — fall back to STDERR
     print STDERR
       "0x03 Error: Something unusual happened before config was read... exiting!\n";
+  }
+}
+
+# -------------------------------------------------------------------------
+# check_ssl_cert($certfile) — inspects the PEM certificate for validity/expiry
+# Logs a warning (and exits) if the certificate is invalid or already expired.
+# Logs a warning (but continues) if it expires within 30 days.
+# -------------------------------------------------------------------------
+sub check_ssl_cert {
+  my ($file) = @_;
+  my $cert = eval { PEM_file2cert($file) };
+  if ($@ || !$cert) {
+    print $tee purdydate()
+      . " 0x0C Error: Could not parse SSL certificate file '$file': $@\n";
+    exit $SIG{TERM};
+  }
+
+  my $info     = CERT_asHash($cert);
+  CERT_free($cert);
+
+  my $now        = time();
+  my $not_before = $info->{not_before};  # epoch seconds
+  my $not_after  = $info->{not_after};   # epoch seconds
+
+  if (!defined $not_before || !defined $not_after) {
+    print $tee purdydate()
+      . " 0x0C Warning: Could not read validity dates from SSL certificate.\n";
+    return;
+  }
+
+  if ($now < $not_before) {
+    # Certificate is not yet valid
+    my $valid_from = scalar localtime($not_before);
+    print $tee purdydate()
+      . " 0x0C Error: SSL certificate is not yet valid (valid from: $valid_from). Exiting.\n";
+    exit $SIG{TERM};
+  }
+
+  if ($now > $not_after) {
+    # Certificate has already expired
+    my $expired_on = scalar localtime($not_after);
+    print $tee purdydate()
+      . " 0x0C Error: SSL certificate has EXPIRED (expired: $expired_on)."
+      . " Clients will receive SSL errors. Exiting.\n";
+    exit $SIG{TERM};
+  }
+
+  my $days_left = int(($not_after - $now) / 86400);
+  if ($days_left <= 30) {
+    my $expires_on = scalar localtime($not_after);
+    print $tee purdydate()
+      . " 0x0C Warning: SSL certificate expires in $days_left day(s) ($expires_on)."
+      . " Please renew soon.\n";
+  }
+  else {
+    print $tee purdydate()
+      . " 0x00 SSL certificate is valid. Expires in $days_left day(s).\n";
   }
 }
 
