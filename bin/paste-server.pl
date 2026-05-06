@@ -276,7 +276,7 @@ sub server {
     if (defined $maxpastesize && $total_bytes > $maxpastesize) {
       close(P);
       unlink($filename);
-      print $cl "0x0E Error: Paste exceeds maximum allowed size of $maxpastesize bytes!\n";
+      print $cl "\r\n\r\n0x0E Error: Paste exceeds maximum allowed size of $maxpastesize bytes!\n";
       print $tee purdydate() . " 0x0E " . $cl->peerhost . " paste too large ($total_bytes bytes), rejected.\n";
       $cl->close();
       return 0;
