@@ -209,7 +209,7 @@ if ( !isint($seclvl) ) {
 
 # Enforce a minimum security level to prevent trivially short IDs / collisions
 if ( $seclvl < 8 ) {
-    print $tee prudydate()
+    print $tee purdydate()
       . " 0x0F You cannot set the seclvl lower than 8! It is insecure and could cause collisions!\n";
     exit $SIG{TERM};
 }
@@ -252,7 +252,7 @@ my $sock = IO::Socket::IP->new(
 
     # allow quick restarts without "address already in use"
     ReuseAddr => 1
-) or print LOG "0x08 Error: " . prudydate() . " $!";
+);
 
 # set umask so created paste files get mode 644 (world-readable)
 umask(022);
