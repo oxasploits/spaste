@@ -69,7 +69,7 @@ if (@data) {
     exit 1;
   };
   print $sock @data;
-  print $sock "\n";
+  print $sock "<<END>>\n";
   $sock->shutdown(1);
   my $url;
   my $err;
@@ -99,4 +99,4 @@ if (!defined $_) {
   print STDERR "Error: You should add your paste data to stdin.\n";
   print STDERR "Usage:\n  echo abc | $0 --server oxasploits.com --port 8888\n";
   exit 1;
-}}
+}

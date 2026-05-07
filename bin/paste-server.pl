@@ -364,11 +364,6 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
     print $tee purdydate() . " 0x00 " . $cl->peerhost . "/" . $cl->peerport;
     print $tee " $rndid : storing at $pasteroot$rndid\n";
 
-    # Immediately announce the future paste URL to avoid client/server read deadlocks.
-    print $tee purdydate() . " 0x00 " . $cl->peerhost . "/" . $cl->peerport;
-    print $tee " $rndid : serving at $paste_url\n";
-    print $cl "$paste_url\n";
-
    # Open the paste file for writing; die on failure so the thread exits cleanly
     open( P, '>', $filename ) or do {
         print $cl "0x15 Error: Could not generate file!";
@@ -383,8 +378,7 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
     if ( $read_status > 0 ) {
         close(P);
         unlink($filename);
-        print $cl "\r\n\r\n$client_err\n";
-        print $tee purdydate() . " $log_err\n";
+        report_client_result( $cl, undef, $read_status, $client_err, $log_err );
         $cl->close();
         return $read_status;
     }
@@ -392,10 +386,28 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
     # flush and close the paste file
     close(P);
 
+    report_client_result( $cl, $paste_url, 0, undef, undef );
+
     # close the SSL connection only after the file is fully written,
     # otherwise the paste could be truncated
     $cl->close();
     return 0;
+}
+
+# -------------------------------------------------------------------------
+# report_client_result($client_socket, $paste_url, $status, $client_err, $log_err)
+# Send exactly one final result to the client and log the corresponding event.
+# -------------------------------------------------------------------------
+sub report_client_result {
+    my ( $cl, $paste_url, $status, $client_err, $log_err ) = @_;
+    if ( defined $status && $status > 0 ) {
+        print $cl "$client_err\n";
+        print $tee purdydate() . " $log_err\n";
+        return;
+    }
+    print $tee purdydate() . " 0x00 " . $cl->peerhost . "/" . $cl->peerport;
+    print $tee " serving at $paste_url\n";
+    print $cl "$paste_url\n";
 }
 
 # -------------------------------------------------------------------------
@@ -410,6 +422,9 @@ sub read_paste_lines {
     my $total_bytes = 0;
 
     while ( my $line = $cl->getline() ) {
+        if ( $line eq "<<END>>\n" || $line eq "<<END>>\r\n" ) {
+            last;
+        }
         $total_bytes += length($line);
         if ( defined $maxpastesize && $total_bytes > $maxpastesize ) {
             return (
