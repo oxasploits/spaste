@@ -359,7 +359,7 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
             close(P);
             unlink($filename);
             print $cl
-"\r\n\r\n0x13 Error: Paste exceeds maximum allowed size of $maxpastesize bytes!\n";
+"0x13 Error: Paste exceeds maximum allowed size of $maxpastesize bytes!\n";
             print $tee purdydate()
               . " 0x13 "
               . $cl->peerhost
