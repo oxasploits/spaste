@@ -358,14 +358,11 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
     my $rndid    = genuniq();
     my $filename = $pasteroot . $rndid;
 
-    # Log where the paste will be saved and what URL the client will receive
+    my $paste_url = "$srvname/p/$rndid";
+
+    # Log where the paste will be saved
     print $tee purdydate() . " 0x00 " . $cl->peerhost . "/" . $cl->peerport;
     print $tee " $rndid : storing at $pasteroot$rndid\n";
-    print $tee purdydate() . " 0x00 " . $cl->peerhost . "/" . $cl->peerport;
-    print $tee " $rndid : serving at $srvname/p/$rndid\n";
-
-    # Immediately send the client the URL where their paste will be accessible
-    print $cl "$srvname/p/$rndid\n";
 
    # Open the paste file for writing; die on failure so the thread exits cleanly
     open( P, '>', $filename ) or do {
@@ -389,6 +386,11 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
 
     # flush and close the paste file
     close(P);
+
+    # Only after successful validation/write should the client receive the URL.
+    print $tee purdydate() . " 0x00 " . $cl->peerhost . "/" . $cl->peerport;
+    print $tee " $rndid : serving at $paste_url\n";
+    print $cl "$paste_url\n";
 
     # close the SSL connection only after the file is fully written,
     # otherwise the paste could be truncated
