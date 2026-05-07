@@ -14,7 +14,8 @@ function choosePath(e){
   document.getElementById("myInput").focus();
   if(e.key == 'Enter'){
     printUser();
-  } else if(e.keyCode == '38'){ // up arrow
+  // Recall the previous command when the user presses the up arrow.
+  } else if(e.keyCode == '38'){
     e.preventDefault();
     if(counter <= 0){
       document.getElementById("myInput").value = hist[0];
@@ -22,10 +23,11 @@ function choosePath(e){
       counter--;
       document.getElementById("myInput").value = hist[counter];
     } 
-  } else if(e.keyCode == '40'){ // down arrow
+  // Move forward through command history when the user presses the down arrow.
+  } else if(e.keyCode == '40'){
     e.preventDefault();
     if(document.getElementById("myInput").value == ""){
-      //do nothing
+      // Leave the empty prompt unchanged.
     } else if(counter == hist.length - 1){
       document.getElementById("myInput").value = "";
       counter++;
@@ -99,7 +101,7 @@ function printUser(){
   } else if(x.toLowerCase() == "help"){
     help();
   } else if(x.toLowerCase() == ""){
-    // do nothing
+    // Ignore empty commands so pressing Enter on a blank prompt has no effect.
   } else if(x.toLowerCase().startsWith("userinfo")){
     author();
   } else if((x.toLowerCase().startsWith("sudo") || (x.toLowerCase().startsWith("su ")))){
@@ -172,7 +174,7 @@ function invalid(){
   store.className = "green-text";
 
   const err = document.createElement("div");
-  // print permission denied of the command name only without the arguments
+  // Mimic a shell error by showing only the command name, not its arguments.
   let cmdName = x.split(" ")[0];
   err.appendChild(document.createTextNode(cmdName + ": permission denied."));
 
@@ -374,8 +376,13 @@ function history(){
 }
 
 
-window.addEventListener("keydown", choosePath); // listen for key presses
-var x = "";			// the input that will be in the input box
-var sleepTime = 30; // the time  between each color change for logo
-var hist = [];		// an array to store all commands excecuted by the user
-var counter = 0;	// used to sift through the previous commands
+// Listen for terminal-style key handling across the page.
+window.addEventListener("keydown", choosePath);
+// Current text from the active prompt.
+var x = "";
+// Delay, in milliseconds, between logo color changes.
+var sleepTime = 30;
+// Command history for the fake terminal prompt.
+var hist = [];
+// Current position while navigating through command history.
+var counter = 0;

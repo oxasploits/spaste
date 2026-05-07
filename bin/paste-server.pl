@@ -20,16 +20,26 @@
 # -------------------------------------------------------------------------
 use strict;
 use warnings;
-use IO::Handle;                                # for autoflush on filehandles
-use Fcntl ("F_GETFL", "F_SETFL", "O_NONBLOCK"); # fcntl constants for non-blocking I/O
-use Socket;                                    # low-level socket support
-use IO::Socket::SSL;                           # SSL/TLS socket layer
-use IO::Socket::SSL::Utils qw(PEM_file2cert CERT_asHash CERT_free); # certificate introspection
-use Net::SSLeay qw(load_error_strings ERR_get_error ERR_error_string); # low-level SSL for keypair checks
-use threads;                                   # POSIX threads for handling clients concurrently
-use IO::Tee;                                   # tee output to multiple filehandles at once
-use Config::Tiny;                              # lightweight .ini-style config file parser
-use Getopt::Long qw (GetOptions);              # command-line option parsing
+# for autoflush on filehandles
+use IO::Handle;
+# fcntl constants for non-blocking I/O
+use Fcntl ("F_GETFL", "F_SETFL", "O_NONBLOCK");
+# low-level socket support
+use Socket;
+# SSL/TLS socket layer
+use IO::Socket::SSL;
+# certificate introspection
+use IO::Socket::SSL::Utils qw(PEM_file2cert CERT_asHash CERT_free);
+# low-level SSL for keypair checks
+use Net::SSLeay qw(load_error_strings ERR_get_error ERR_error_string);
+# POSIX threads for handling clients concurrently
+use threads;
+# tee output to multiple filehandles at once
+use IO::Tee;
+# lightweight .ini-style config file parser
+use Config::Tiny;
+# command-line option parsing
+use Getopt::Long qw (GetOptions);
 
 # -------------------------------------------------------------------------
 # Signal handling and output setup
@@ -71,24 +81,33 @@ my (
   $certfile, $keyfile,   $pidfile, $seclvl,  $maxpastesize);
 
 my $cfgf = undef;
-GetOptions('conf=s' => \$cfgf);           # parse --conf <file> into $cfgf
-my $config = Config::Tiny->read($cfgf);   # parse the INI-style config file
+# parse --conf <file> into $cfgf
+GetOptions('conf=s' => \$cfgf);
+# parse the INI-style config file
+my $config = Config::Tiny->read($cfgf);
 
 # Pull each setting out of the parsed config object
-$host      = $config->{Server}{fqdn};        # fully-qualified domain name we listen on
-$srvname   = $config->{Server}{baseuri};     # base HTTPS URI shown to users in paste links
-$port      = $config->{Server}{listenport};  # TCP port to accept incoming paste connections
-$certfile  = $config->{SSL}{certfile};       # path to the PEM certificate file
-$keyfile   = $config->{SSL}{keyfile};        # path to the PEM private key file
-$pidfile   = $config->{Settings}{pidfile};   # lock file written with our PID to prevent double-starts
-$pasteroot = $config->{Server}{pasteroot};   # filesystem directory where paste files are stored
-$logfile   = $config->{Settings}{logfile};   # log file path
-$seclvl    = $config->{Settings}{seclvl};    # number of random characters in a paste ID (entropy level)
-$maxpastesize = $config->{Server}{maxpastesize};  # maximum allowed paste size in bytes
-my $ver = "v1.3.1";                          # hell yea, new revision!
-                                             # can we have a party
-                                             # with lots of hookers?
-                                             # bonus points for anal beads
+# fully-qualified domain name we listen on
+$host      = $config->{Server}{fqdn};
+# base HTTPS URI shown to users in paste links
+$srvname   = $config->{Server}{baseuri};
+# TCP port to accept incoming paste connections
+$port      = $config->{Server}{listenport};
+# path to the PEM certificate file
+$certfile  = $config->{SSL}{certfile};
+# path to the PEM private key file
+$keyfile   = $config->{SSL}{keyfile};
+# lock file written with our PID to prevent double-starts
+$pidfile   = $config->{Settings}{pidfile};
+# filesystem directory where paste files are stored
+$pasteroot = $config->{Server}{pasteroot};
+# log file path
+$logfile   = $config->{Settings}{logfile};
+# number of random characters in a paste ID (entropy level)
+$seclvl    = $config->{Settings}{seclvl};
+# maximum allowed paste size in bytes
+$maxpastesize = $config->{Server}{maxpastesize};
+my $ver = "v1.3.1";
 
 # -------------------------------------------------------------------------
 # Pre-flight sanity checks
@@ -117,9 +136,12 @@ close(PIDF);
 
 # Open the log file in append mode and tee all output to both log and STDOUT
 open(my $lfh, '>>', $logfile) or die $!;
-my $tee = IO::Tee->new($lfh, \*STDOUT);  # writes go to log file AND console
-select $tee;                              # make $tee the default output handle
-$lfh->autoflush();                        # flush log writes immediately
+# writes go to log file and console
+my $tee = IO::Tee->new($lfh, \*STDOUT);
+# make $tee the default output handle
+select $tee;
+# flush log writes immediately
+$lfh->autoflush();
 
 print $tee purdydate() . " 0x00 Starting SPaste $ver\n";
 print $tee purdydate() . " 0x00 Binding to: $host:$port\n";
@@ -197,14 +219,18 @@ chdir "$siteroot"
 
 # Create a plain TCP listening socket; SSL is negotiated per-connection in the thread
 my $sock = IO::Socket::IP->new(
-  Listen    => SOMAXCONN,  # maximum OS backlog of pending connections
+  # maximum OS backlog of pending connections
+  Listen    => SOMAXCONN,
   LocalPort => $port,
   Blocking  => 1,
-  ReuseAddr => 1)          # allow quick restarts without "address already in use"
+  # allow quick restarts without "address already in use"
+  ReuseAddr => 1)
   or print LOG "0x08 Error: " . prudydate() . " $!";
 
-umask(022); # set umask so created paste files get mode 644 (world-readable)
-my $WITH_THREADS = 1;  # enable threading
+# set umask so created paste files get mode 644 (world-readable)
+umask(022);
+# enable threading
+my $WITH_THREADS = 1;
 
 # -------------------------------------------------------------------------
 # Main accept loop — runs forever, one thread per incoming connection
@@ -212,7 +238,8 @@ my $WITH_THREADS = 1;  # enable threading
 
 while (1) {
   eval {
-    my $cl = $sock->accept();    # block until a client connects
+    # block until a client connects
+    my $cl = $sock->accept();
     if ($cl) {
       # Spin up a new thread to handle this client so the main loop can keep accepting
       my $th = threads->create(\&server, $cl)
@@ -222,12 +249,15 @@ while (1) {
         or print $tee purdydate()
         . " 0x05 Error: Thread detach request failed. $!\n";
     }
-  };    # wrap in eval so a thread error doesn't kill the whole server
-  if ($@) { # if eval caught an exception, log it and exit
+  # wrap in eval so a thread error doesn't kill the whole server
+  };
+  # if eval caught an exception, log it and exit
+  if ($@) {
     print $tee purdydate() . " 0x04 Error: No eval! $!\n";
     exit $SIG{TERM};
   }
-}    # loop forever
+# loop forever
+}
 close(LOG);
 close(STDERR);
 
@@ -235,7 +265,8 @@ close(STDERR);
 # server(\$client_socket) — handles a single paste connection in its own thread
 # -------------------------------------------------------------------------
 sub server {
-  my $cl = shift; # raw TCP client socket passed from the accept loop
+  # raw TCP client socket passed from the accept loop
+  my $cl = shift;
 
   # Upgrade the plain TCP socket to SSL/TLS using our certificate and key.
   # This must happen before any data is exchanged with the client.
@@ -244,9 +275,12 @@ sub server {
     SSL_server          => 1,
     SSL_cert_file       => $certfile,
     SSL_key_file        => $keyfile,
-    SSL_verifycn_name   => $host,     # hostname to verify in the certificate
-    SSL_verifycn_scheme => 'default', # use the default verification scheme
-    SSL_hostname        => $host)     # SNI hostname sent during handshake
+    # hostname to verify in the certificate
+    SSL_verifycn_name   => $host,
+    # use the default verification scheme
+    SSL_verifycn_scheme => 'default',
+    # SNI hostname sent during handshake
+    SSL_hostname        => $host)
     or do {
     print $tee purdydate() . " 0x01 Error: Could not open socket as SSL! $! ";
     die;
@@ -292,9 +326,11 @@ sub server {
     print P $line;
   }
 
-  close(P);            # flush and close the paste file
-  $cl->close();        # close SSL connection only after the file is fully written
-                       # (closing earlier would truncate the paste)
+  # flush and close the paste file
+  close(P);
+  # close the SSL connection only after the file is fully written,
+  # otherwise the paste could be truncated
+  $cl->close();
   return 0;
 }
 
@@ -302,12 +338,15 @@ sub server {
 # genuniq() — generates a unique paste identifier
 # -------------------------------------------------------------------------
 sub genuniq {
-  my $pasid;    # accumulator for the paste ID string
-  my @set = ('A' .. 'Z', 'a' .. 'z', 0 .. 9); # character pool: 26+26+10 = 62 chars
+  # accumulator for the paste ID string
+  my $pasid;
+  # character pool: 26 uppercase + 26 lowercase + 10 digits = 62 chars
+  my @set = ('A' .. 'Z', 'a' .. 'z', 0 .. 9);
   # With 62 characters and a length of $seclvl (default 12),
   # there are ~3.2 quadrillion possible IDs, which is more than enough
   # to avoid collisions while remaining cryptographically unpredictable.
-  $pasid .= $set[rand($#set)] for 1 .. $seclvl; # append one random char per iteration
+  # append one random character per iteration
+  $pasid .= $set[rand($#set)] for 1 .. $seclvl;
   return $pasid;
 }
 
@@ -332,7 +371,8 @@ sub purdydate {
 # We use it to remove the PID lock file and print a clean shutdown message.
 # -------------------------------------------------------------------------
 END {
-  if ($cfgf) {          # only run cleanup if the config was successfully read
+  # only run cleanup if the config was successfully read
+  if ($cfgf) {
     if (-e $pidfile) {
       unless ($SIG{TERM} || $SIG{INT}) {
         # If we're here without a handled signal, something unexpected happened
@@ -427,8 +467,9 @@ sub check_ssl_cert {
   CERT_free($cert);
 
   my $now        = time();
-  my $not_before = $info->{not_before};  # epoch seconds
-  my $not_after  = $info->{not_after};   # epoch seconds
+  # certificate validity timestamps, in epoch seconds
+  my $not_before = $info->{not_before};
+  my $not_after  = $info->{not_after};
 
   if (!defined $not_before || !defined $not_after) {
     print $tee purdydate()
@@ -471,6 +512,6 @@ sub check_ssl_cert {
 # -------------------------------------------------------------------------
 sub isint {
   my $n = shift;
-  return $n =~ /^\s*[+-]?\d+\s*$/;  # allow optional leading/trailing whitespace and sign
+  # allow optional leading/trailing whitespace and sign
+  return $n =~ /^\s*[+-]?\d+\s*$/;
 }
-
