@@ -203,12 +203,12 @@ check_ssl_keypair( $certfile, $keyfile );
 
 # Validate that the port and security level are integers
 if ( !isint($port) ) {
-    print $tee purdydate() . " 0x0D The port doesn't seem to be an integer!\n";
+    print $tee purdydate() . " 0x10 The port doesn't seem to be an integer!\n";
     exit $SIG{TERM};
 }
 if ( !isint($seclvl) ) {
     print $tee purydate()
-      . " 0x0E The security level doesn't seem to be an integer!\n";
+      . " 0x11 The security level doesn't seem to be an integer!\n";
     exit $SIG{TERM};
 }
 
@@ -227,7 +227,7 @@ if ( $seclvl < 12 ) {
 if ( defined $maxpastesize ) {
     if ( !isint($maxpastesize) || $maxpastesize <= 0 ) {
         print $tee purdydate()
-          . " 0x0E The maxpastesize doesn't seem to be a positive integer!\n";
+          . " 0x12 The maxpastesize doesn't seem to be a positive integer!\n";
         exit $SIG{TERM};
     }
     print $tee purdydate() . " 0x00 Max paste size: $maxpastesize bytes\n";
@@ -347,8 +347,8 @@ sub server {
       };
 
 # Read (but don't change) the current socket flags; used to confirm the fd is valid
-    my $flags = fcntl( $cl, F_GETFL, 0 )
-      or print $tee purdydate() . " 0x09 $cl->peerhost $!";
+my $flags = fcntl( $cl, F_GETFL, 0 )
+      or print $tee purdydate() . " 0x14 $cl->peerhost $!";
 
    # Generate a unique, random ID for this paste and build the full storage path
     my $rndid    = genuniq();
@@ -365,8 +365,8 @@ sub server {
 
    # Open the paste file for writing; die on failure so the thread exits cleanly
     open( P, '>', $filename ) or do {
-        print $cl "0x0C Error: Could not generate file!";
-        print $tee purdydate() . "0x0C Could not write to file! ";
+        print $cl "0x15 Error: Could not generate file!";
+        print $tee purdydate() . "0x15 Could not write to file! ";
         die;
     };
 
@@ -379,9 +379,9 @@ sub server {
             close(P);
             unlink($filename);
             print $cl
-"\r\n\r\n0x0E Error: Paste exceeds maximum allowed size of $maxpastesize bytes!\n";
+"\r\n\r\n0x13 Error: Paste exceeds maximum allowed size of $maxpastesize bytes!\n";
             print $tee purdydate()
-              . " 0x0E "
+              . " 0x13 "
               . $cl->peerhost
               . " paste too large ($total_bytes bytes), rejected.\n";
             $cl->close();
@@ -499,7 +499,7 @@ sub check_ssl_keypair {
     my $ctx = Net::SSLeay::CTX_new();
     if ( !$ctx ) {
         print $tee purdydate()
-          . " 0x0D Error: Could not create SSL context for keypair check.\n";
+          . " 0x16 Error: Could not create SSL context for keypair check.\n";
         exit $SIG{TERM};
     }
 
@@ -512,7 +512,7 @@ sub check_ssl_keypair {
     {
         my $err = Net::SSLeay::ERR_error_string( Net::SSLeay::ERR_get_error() );
         print $tee purdydate()
-          . " 0x0C Error: Could not load certificate for keypair validation: $err\n";
+          . " 0x19 Error: Could not load certificate for keypair validation: $err\n";
         Net::SSLeay::CTX_free($ctx);
         exit $SIG{TERM};
     }
@@ -526,7 +526,7 @@ sub check_ssl_keypair {
     {
         my $err = Net::SSLeay::ERR_error_string( Net::SSLeay::ERR_get_error() );
         print $tee purdydate()
-          . " 0x0D Error: Private key is invalid or could not be loaded: $err\n";
+          . " 0x17 Error: Private key is invalid or could not be loaded: $err\n";
         Net::SSLeay::CTX_free($ctx);
         exit $SIG{TERM};
     }
@@ -535,7 +535,7 @@ sub check_ssl_keypair {
     if ( !Net::SSLeay::CTX_check_private_key($ctx) ) {
         my $err = Net::SSLeay::ERR_error_string( Net::SSLeay::ERR_get_error() );
         print $tee purdydate()
-          . " 0x0D Error: Private key does not match the certificate: $err\n";
+          . " 0x18 Error: Private key does not match the certificate: $err\n";
         Net::SSLeay::CTX_free($ctx);
         exit $SIG{TERM};
     }
@@ -555,7 +555,7 @@ sub check_ssl_cert {
     my $cert = eval { PEM_file2cert($file) };
     if ( $@ || !$cert ) {
         print $tee purdydate()
-          . " 0x0C Error: Could not parse SSL certificate file '$file': $@\n";
+          . " 0x1A Error: Could not parse SSL certificate file '$file': $@\n";
         exit $SIG{TERM};
     }
 
@@ -579,7 +579,7 @@ sub check_ssl_cert {
         # Certificate is not yet valid
         my $valid_from = scalar localtime($not_before);
         print $tee purdydate()
-          . " 0x0C Error: SSL certificate is not yet valid (valid from: $valid_from). Exiting.\n";
+          . " 0x1B Error: SSL certificate is not yet valid (valid from: $valid_from). Exiting.\n";
         exit $SIG{TERM};
     }
 
@@ -588,7 +588,7 @@ sub check_ssl_cert {
         # Certificate has already expired
         my $expired_on = scalar localtime($not_after);
         print $tee purdydate()
-          . " 0x0C Error: SSL certificate has EXPIRED (expired: $expired_on)."
+          . " 0x1C Error: SSL certificate has EXPIRED (expired: $expired_on)."
           . " Clients will receive SSL errors. Exiting.\n";
         exit $SIG{TERM};
     }
