@@ -88,7 +88,8 @@ if ( !-r $ARGV[1] ) {
 # Declare all config-derived variables up front
 my (
     $logfile,  $pasteroot, $host,    $srvname, $port,
-    $certfile, $keyfile,   $pidfile, $seclvl,  $maxpastesize
+    $certfile, $keyfile,   $pidfile, $seclvl,  $maxpastesize,
+    $allowbinary
 );
 
 my $cfgf = undef;
@@ -129,6 +130,10 @@ $seclvl = $config->{Settings}{seclvl};
 
 # maximum allowed paste size in bytes
 $maxpastesize = $config->{Server}{maxpastesize};
+
+# whether to allow binary/control characters in pasted content
+$allowbinary = $config->{Settings}{allowbinary};
+
 my $ver = "v1.3.1";
 
 # -------------------------------------------------------------------------
@@ -226,6 +231,21 @@ if ( defined $maxpastesize ) {
         exit $SIG{TERM};
     }
     print $tee purdydate() . " 0x00 Max paste size: $maxpastesize bytes\n";
+}
+
+# Validate allowbinary if provided; treat undefined as permissive (allow binary)
+if (defined $allowbinary) {
+  if ($allowbinary ne '0' && $allowbinary ne '1') {
+    print $tee purdydate()
+      . " 0x0E The allowbinary setting must be 0 or 1!\n";
+    exit $SIG{TERM};
+  }
+  if ($allowbinary eq '0') {
+    print $tee purdydate() . " 0x00 Binary paste content is disabled.\n";
+  }
+  else {
+    print $tee purdydate() . " 0x00 Binary paste content is allowed.\n";
+  }
 }
 
 # -------------------------------------------------------------------------
@@ -364,6 +384,23 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
               . " 0x13 "
               . $cl->peerhost
               . " paste too large ($total_bytes bytes), rejected.\n";
+            $cl->close();
+            return 0;
+        }
+        print P $line;
+    }
+        if ( defined $allowbinary
+            && $allowbinary eq '0'
+            && $line =~ /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/ )
+        {
+            close(P);
+            unlink($filename);
+            print $cl
+"\r\n\r\n0x0E Error: Paste contains binary characters, which is not allowed!\n";
+            print $tee purdydate()
+              . " 0x0E "
+              . $cl->peerhost
+              . " paste contains binary characters, rejected.\n";
             $cl->close();
             return 0;
         }
