@@ -371,40 +371,16 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
     };
 
 # Read all lines from the client and write them directly to the paste file.
-# getline() blocks until data arrives and returns undef on EOF (client disconnect).
-    my $total_bytes = 0;
-    while ( my $line = $cl->getline() ) {
-        $total_bytes += length($line);
-        if ( defined $maxpastesize && $total_bytes > $maxpastesize ) {
-            close(P);
-            unlink($filename);
-            print $cl
-"\r\n\r\n0x13 Error: Paste exceeds maximum allowed size of $maxpastesize bytes!\n";
-            print $tee purdydate()
-              . " 0x13 "
-              . $cl->peerhost
-              . " paste too large ($total_bytes bytes), rejected.\n";
-            $cl->close();
-            return 0;
-        }
-        print P $line;
-    }
-        if ( defined $allowbinary
-            && $allowbinary eq '0'
-            && $line =~ /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/ )
-        {
-            close(P);
-            unlink($filename);
-            print $cl
-"\r\n\r\n0x0E Error: Paste contains binary characters, which is not allowed!\n";
-            print $tee purdydate()
-              . " 0x0E "
-              . $cl->peerhost
-              . " paste contains binary characters, rejected.\n";
-            $cl->close();
-            return 0;
-        }
-        print P $line;
+# Any validation/read errors return a non-zero status to this caller, which
+# then writes the corresponding error message back to the client.
+    my ( $read_status, $client_err, $log_err ) = read_paste_lines( $cl, \*P );
+    if ( $read_status > 0 ) {
+        close(P);
+        unlink($filename);
+        print $cl "\r\n\r\n$client_err\n";
+        print $tee purdydate() . " $log_err\n";
+        $cl->close();
+        return $read_status;
     }
 
     # flush and close the paste file
@@ -413,6 +389,48 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
     # close the SSL connection only after the file is fully written,
     # otherwise the paste could be truncated
     $cl->close();
+    return 0;
+}
+
+# -------------------------------------------------------------------------
+# read_paste_lines($client_socket, $filehandle) — reads client paste data,
+# enforces limits/policy, and writes valid data to disk.
+# Returns:
+#   (0) on success
+#   (>0, $client_error_message, $log_error_message) on failure
+# -------------------------------------------------------------------------
+sub read_paste_lines {
+    my ( $cl, $fh ) = @_;
+    my $total_bytes = 0;
+
+    while ( my $line = $cl->getline() ) {
+        $total_bytes += length($line);
+        if ( defined $maxpastesize && $total_bytes > $maxpastesize ) {
+            return (
+                1,
+                "0x13 Error: Paste exceeds maximum allowed size of $maxpastesize bytes!",
+                "0x13 " . $cl->peerhost
+                  . " paste too large ($total_bytes bytes), rejected."
+            );
+        }
+        if ( defined $allowbinary
+            && $allowbinary eq '0'
+            && $line =~ /[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/ )
+        {
+            return (
+                2,
+                "0x0E Error: Paste contains binary characters, which is not allowed!",
+                "0x0E " . $cl->peerhost
+                  . " paste contains binary characters, rejected."
+            );
+        }
+        print {$fh} $line or return (
+            3,
+            "0x15 Error: Could not write paste data!",
+            "0x15 Could not write paste data for " . $cl->peerhost . ": $!"
+        );
+    }
+
     return 0;
 }
 
