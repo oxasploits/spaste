@@ -364,6 +364,11 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
     print $tee purdydate() . " 0x00 " . $cl->peerhost . "/" . $cl->peerport;
     print $tee " $rndid : storing at $pasteroot$rndid\n";
 
+    # Immediately announce the future paste URL to avoid client/server read deadlocks.
+    print $tee purdydate() . " 0x00 " . $cl->peerhost . "/" . $cl->peerport;
+    print $tee " $rndid : serving at $paste_url\n";
+    print $cl "$paste_url\n";
+
    # Open the paste file for writing; die on failure so the thread exits cleanly
     open( P, '>', $filename ) or do {
         print $cl "0x15 Error: Could not generate file!";
@@ -386,11 +391,6 @@ my $flags = fcntl( $cl, F_GETFL, 0 )
 
     # flush and close the paste file
     close(P);
-
-    # Only after successful validation/write should the client receive the URL.
-    print $tee purdydate() . " 0x00 " . $cl->peerhost . "/" . $cl->peerport;
-    print $tee " $rndid : serving at $paste_url\n";
-    print $cl "$paste_url\n";
 
     # close the SSL connection only after the file is fully written,
     # otherwise the paste could be truncated

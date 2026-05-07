@@ -71,26 +71,29 @@ if (@data) {
   print $sock @data;
   print $sock "\n";
   $sock->shutdown(1);
-  my $count = 0;
-  while(my $res = <$sock>) {
-      if (($res =~ m|https://.*/p/.*|) || ($res =~ m/0x/)) {
-      
-      print $res;
-      exit 0;
-      if ($count == 2) { $sock->close(); exit 0 }
+  my $url;
+  my $err;
+  while (my $res = <$sock>) {
+    if ($res =~ m/^0x/) {
+      $err = $res;
+      next;
     }
-    # elsif($res =~ m|<<END>>|) {
-    #    $sock->close();
-    #    exit 0;
-    #}
-    #  elsif($res =~ m|^0x|) {
-    #    print $res;
-    #exit 1;
-    #}
-    else {
-      print STDERR "Error: This doesn't look like an spaste server!\n";
-      exit 1;
+    if ($res =~ m|https://.*/p/.*|) {
+      $url = $res;
+      next;
     }
+  }
+
+  if (defined $err) {
+    print $err;
+    exit 1;
+  }
+  if (defined $url) {
+    print $url;
+    exit 0;
+  }
+  print STDERR "Error: This doesn't look like an spaste server!\n";
+  exit 1;
 }
 if (!defined $_) {
   print STDERR "Error: You should add your paste data to stdin.\n";
