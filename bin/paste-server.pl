@@ -346,6 +346,10 @@ sub server {
         die;
       };
 
+    # Flush every write to the client immediately so that error messages and
+    # the paste URL are never silently dropped when the connection is closed.
+    $cl->autoflush(1);
+
 # Read (but don't change) the current socket flags; used to confirm the fd is valid
 my $flags = fcntl( $cl, F_GETFL, 0 )
       or print $tee purdydate() . " 0x14 $cl->peerhost $!";
